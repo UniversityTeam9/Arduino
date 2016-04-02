@@ -13,6 +13,16 @@ SR04 ultrasonicSensor;
 const int TRIGGER_PIN = 6; //D6
 const int ECHO_PIN = 5; //D5
 
+SR04 ultrasonicSensor2;
+const int TRIGGER_PIN2 = 24; //D24
+const int ECHO_PIN2 = 26;
+GP2Y0A21 infraRedSensor;
+const int INFRA_PIN = A0; //analog pin A0
+const int tonePin = 7; //tone pin
+boolean sensorBack = false;
+boolean playSound = false;
+int beepSpeed = 0;
+
 long previousMillis = 0;
 long interval = 1000;  
 int tftrefresh = 0;
@@ -34,6 +44,13 @@ void setup() {
 
 void loop() {
   handleInput();
+
+  if (playSound == true){
+    digitalWrite(7, HIGH);
+    delay(beepSpeed);             
+    digitalWrite(7, LOW);    
+    delay(beepSpeed); 
+  }
 
   //Serial.println(Serial.available());
 }
@@ -119,12 +136,58 @@ void handleInput() { //handle the Serial Input (if there is input)
         
   }
 
-  int distance = ultrasonicSensor.getDistance();
-  if((distance < 15) && (distance > 0) && sensorToggle){
-    //Serial.println(distance);
-      car.setSpeed(0);
-      car.setAngle(0);
+  //
+  //Sensors and beep
+  //
+  
+  int distance = ultrasonicSensor.getDistance();  
+  //Serial.println(distance);
+  int distanceInfra = infraRedSensor.getDistance();
+  
+  //Serial.println(distanceInfra);
+  
+  if(((distance < 35) && (distance > 0) || (distanceInfra < 35) && (distanceInfra > 0)) && sensorToggle){
+    playSound = false;
+    beepSpeed = 0;
+    digitalWrite(tonePin, HIGH);
+    car.setSpeed(0);
+    car.setAngle(0);
+  }else{
+    digitalWrite(tonePin, LOW);
+  }
+ 
+  int distance2 = ultrasonicSensor2.getDistance();
+  Serial.println(distance2);
+  if(((distance2 < 40) && (distance2 > 15) && (sensorBack == true))&& sensorToggle){
+    if ((distance2 < 39) && (distance2 > 25) && (sensorBack == true)){
+      playSound = true;
+      beepSpeed = 400;
+    }else if(((distance2 < 25) && (distance2 > 15) && (sensorBack == true))&& sensorToggle){
+      playSound = true;
+      beepSpeed = 200;
+    }else{
+      digitalWrite(7, LOW);
+      distance = 80;
+      playSound = false;
+      beepSpeed = 0;
     }
+  }
+  if ((distance2 == 0 && (sensorBack == true))&& sensorToggle){
+      digitalWrite(7, LOW);
+      playSound = false;
+      beepSpeed = 0;
+  }
+  if(((distance2 < 15) && (distance2 > 0) && (sensorBack == true))&& sensorToggle){
+    playSound = false;
+    beepSpeed = 0;
+    Serial.println(distance2);
+    digitalWrite(7, HIGH);
+    car.setSpeed(0);
+    car.setAngle(0);
+  }else{
+    if(sensorToggle)
+            digitalWrite(7, LOW);
+  }
 }
 
 void toggleSensors(){
