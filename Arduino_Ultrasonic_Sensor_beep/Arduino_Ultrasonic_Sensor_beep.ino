@@ -19,6 +19,8 @@ const int ECHO_PIN2 = 26;
 GP2Y0A21 infraRedSensor;
 const int INFRA_PIN = A0; //analog pin A0
 const int tonePin = 7; //tone pin
+const int lightPin = 28; //light pin
+
 boolean sensorBack = false;
 boolean playSound = false;
 int beepSpeed = 0;
@@ -35,7 +37,7 @@ boolean connected;
 void setup() {
   Serial3.begin(9600);
   //Serial.begin(9600);
-  Serial3.println("W forward, S backward\n A left\n D  right\n P accelerate, L deccelerate\n i info, R reset, Q toggle sensors on/off");
+  Serial3.println("W forward, S backward\n A left\n D  right\n P accelerate, L deccelerate\n i info, R reset, Q toggle sensors on/off, Y/X lights");
 
   ultrasonicSensor.attach(TRIGGER_PIN, ECHO_PIN);
   
@@ -126,6 +128,12 @@ void handleInput() { //handle the Serial Input (if there is input)
         reset();
         Serial3.println("Car has been reset!");
         break;
+      case 'y':
+        digitalWrite(28, HIGH);
+        break;
+      case 'x':
+        digitalWrite(28, LOW);
+        break;
       default:
         // command not valid
         Serial3.println("Not a valid command!");
@@ -157,7 +165,7 @@ void handleInput() { //handle the Serial Input (if there is input)
   }
  
   int distance2 = ultrasonicSensor2.getDistance();
-  Serial.println(distance2);
+  //Serial.println(distance2);
   if(((distance2 < 40) && (distance2 > 15) && (sensorBack == true))&& sensorToggle){
     if ((distance2 < 39) && (distance2 > 25) && (sensorBack == true)){
       playSound = true;
@@ -180,7 +188,7 @@ void handleInput() { //handle the Serial Input (if there is input)
   if(((distance2 < 15) && (distance2 > 0) && (sensorBack == true))&& sensorToggle){
     playSound = false;
     beepSpeed = 0;
-    Serial.println(distance2);
+    //Serial.println(distance2);
     digitalWrite(7, HIGH);
     car.setSpeed(0);
     car.setAngle(0);
