@@ -189,3 +189,210 @@ void setup() {
    * Motors
    */
   Motors.init();
+  /*
+   * Proximity
+   */
+  FrontProximity.attach(FRONT_PROXIMITY_TRIGGER, FRONT_PROXIMITY_ECHO);
+  RearProximity.attach(REAR_PROXIMITY_TRIGGER, REAR_PROXIMITY_ECHO);
+  Infrared.attach(INFRARED);
+
+  /*
+   * Gyroscope
+   */
+  Gyro.attach();
+  Gyro.begin();
+
+  /*
+   * Lights
+   */
+  pinMode(LIGHT_RIGHT, OUTPUT);
+  pinMode(LIGHT_LEFT, OUTPUT);
+  pinMode(LIGHT_FRONT, OUTPUT);
+
+  /*
+   * Speaker
+   */
+  pinMode(SPEAKER_GND, OUTPUT);
+  pinMode(SPEAKER_PIN, OUTPUT);
+
+  digitalWrite(SPEAKER_GND, LOW);
+  digitalWrite(SPEAKER_PIN, LOW);
+
+  /*
+   * Timer 1
+   */
+  if (ENABLE_TIMER1) {
+    Timer1.initialize(timer1_us);
+    Timer1.attachInterrupt(timer1_func);
+    Timer1.start();
+  }
+
+  /*
+   * Timer 3
+   */
+  if (ENABLE_TIMER3) {
+    Timer3.initialize(timer3_us);
+    Timer3.attachInterrupt(timer3_func);
+    Timer3.start();
+  }
+}
+
+/**
+ * Update sensor values
+ */
+void tick() { 
+  FrontProximityValue = FrontProximity.getDistance();
+  RearProximityValue = RearProximity.getDistance();
+  InfraredValue = Infrared.getDistance();
+
+  if (FrontProximityEnabled && (FrontProximityValue > 0 && FrontProximityValue < 20)) stop();
+  if (RearProximityEnabled && (RearProximityValue > 0 && RearProximityValue < 20)) stop();
+}
+
+/**
+ * Wait for next byte from control port
+ */
+char next() {
+  while (!Control.available()) {
+    tick();
+  }
+
+  return Control.read();
+}
+
+/**
+ * Handle commands
+ */
+void loop() {  
+  switch (next()) {
+    /*
+     * Move
+     */
+    case 'm':
+      switch (next()) {
+        case 'f': moveForward(); break;
+        case 'b': moveBackward(); break;
+      }
+      break;
+
+    /*
+     * Turn
+     */
+    case 't':
+      switch (next()) {
+        case 'l': turnLeft(next()); break;
+        case 'r': turnRight(next()); break;
+      }
+      break;
+
+    /*
+     * Stop
+     */
+    case 's': stop(); break;
+
+    /*
+     * Toggle
+     */
+    case 'o':
+      switch (next()) {
+        case 'f': toggleFrontProximity(next() == '1'); break;
+        case 'r': toggleRearProximity(next() == '1'); break;
+        case 'i': toggleInfrared(next() == '1'); break;
+        case 'l': toggleFrontLight(next() == '1'); break;
+      }
+      break;
+  }
+}
+
+/**
+ * Move forward
+ */
+void moveForward() {
+  Motors.setMotorSpeed(SPEED, SPEED);
+}
+
+/**
+ * Move backward
+ */
+void moveBackward() {
+  Motors.setMotorSpeed(-SPEED, -SPEED);
+}
+
+/**
+ * Wait until the specified angular displacement is met
+ */
+void waitUntilAngularDisplacement(int angle) {
+  int initial = Gyro.getAngularDisplacement();
+  int value;
+
+  do {
+    value = abs(initial - Gyro.getAngularDisplacement());
+    Gyro.update();
+  } while (value < angle);
+}
+
+/**
+ * Turn left the specified angle or INDEFINITELY
+ */
+void turnLeft(int angle) {
+  TurningLeft = true;
+
+  Motors.setMotorSpeed(-SPEED, SPEED);
+
+  if (angle > INDEFINITELY) {
+    waitUntilAngularDisplacement(angle);
+    stop();
+  }
+}
+
+/**
+ * Turn right the specified angle or INDEFINITELY
+ */
+void turnRight(int angle) {
+  TurningRight = true;
+
+  Motors.setMotorSpeed(SPEED, -SPEED);
+
+  if (angle > INDEFINITELY) {
+    waitUntilAngularDisplacement(angle);
+    stop();
+  }
+}
+
+/**
+ * Stop all motors
+ */
+void stop() {
+  Motors.setMotorSpeed(0, 0);
+
+  TurningRight = false;
+  TurningLeft = false;
+}
+
+/**
+ * Toggle front proximity sensor
+ */
+void toggleFrontProximity(bool status) {
+  FrontProximityEnabled = status;
+}
+
+/**
+ * Toggle rear proximity sensor
+ */
+void toggleRearProximity(bool status) {
+  RearProximityEnabled = status;
+}
+
+/**
+ * Toggle infrared sensor
+ */
+void toggleInfrared(bool status) {
+  InfraredEnabled = status;
+}
+
+/**
+ * Toggle front light
+ */
+void toggleFrontLight(bool status) {
+  digitalWrite(LIGHT_FRONT, status ? HIGH : LOW);
+}
