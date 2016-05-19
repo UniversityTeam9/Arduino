@@ -5,7 +5,7 @@
 #define Debug Serial
 #define Control Serial3
 
-#define SPEED 240
+//#define SPEED 240
 #define INDEFINITELY 0
 
 #define ENABLE_TIMER1 false
@@ -20,7 +20,11 @@ const int FrontProximityMax = 40;
 SR04 FrontProximity;
 const int FRONT_PROXIMITY_TRIGGER = 6;
 const int FRONT_PROXIMITY_ECHO = 5;
-
+/*
+ * SPEED
+ * */
+ int SPEED = 240;
+ 
 /*
  * Rear proximity sensor
  */
@@ -34,8 +38,9 @@ const int REAR_PROXIMITY_ECHO = 26;
 /*
  * Infrared sensor
  */
-bool InfraredEnabled = false;
+bool InfraredEnabled = true;
 int InfraredValue;
+const int InfraredValueMin = 36;
 GP2Y0A21 Infrared;
 const int INFRARED = A0;
 
@@ -149,7 +154,7 @@ void timer3_func() {
     /*
      * Indicate front proximity
      */
-    if (FrontProximityValue > 0 && FrontProximityValue < FrontProximityMax) {
+    if (FrontProximityValue > 0 && FrontProximityValue < FrontProximityMax ) {
       if (timer3_counter % (timer3_max / get_cycles(FrontProximityValue)) == 0) {
         digitalWrite(LIGHT_RIGHT, !digitalRead(LIGHT_RIGHT));
         digitalWrite(LIGHT_LEFT, !digitalRead(LIGHT_LEFT));
@@ -191,19 +196,22 @@ void setup() {
   Motors.init();
   /*
    * Proximity
+   * Sensors declared and attached to the car
    */
   FrontProximity.attach(FRONT_PROXIMITY_TRIGGER, FRONT_PROXIMITY_ECHO);
   RearProximity.attach(REAR_PROXIMITY_TRIGGER, REAR_PROXIMITY_ECHO);
   Infrared.attach(INFRARED);
+  pinMode(InfraredValueMin, INPUT);
 
   /*
-   * Gyroscope
+   * Gyroscope attached
    */
   Gyro.attach();
   Gyro.begin();
 
   /*
-   * Lights
+   * Lights attached
+   * Initializing the pins for the lights
    */
   pinMode(LIGHT_RIGHT, OUTPUT);
   pinMode(LIGHT_LEFT, OUTPUT);
@@ -211,6 +219,7 @@ void setup() {
 
   /*
    * Speaker
+   * Initializing the pins for the speaker
    */
   pinMode(SPEAKER_GND, OUTPUT);
   pinMode(SPEAKER_PIN, OUTPUT);
@@ -243,10 +252,12 @@ void setup() {
 void tick() { 
   FrontProximityValue = FrontProximity.getDistance();
   RearProximityValue = RearProximity.getDistance();
-  InfraredValue = Infrared.getDistance();
+  //InfraredValue = Infrared.getDistance();
 
   if (FrontProximityEnabled && (FrontProximityValue > 0 && FrontProximityValue < 20)) stop();
+  //if (FrontProximityEnabled && (InfraredValue > InfraredValueMin)) stop();
   if (RearProximityEnabled && (RearProximityValue > 0 && RearProximityValue < 20)) stop();
+  
 }
 
 /**
@@ -265,6 +276,16 @@ char next() {
  */
 void loop() {  
   switch (next()) {
+    /*
+    * SPEED
+    */
+    case '9':
+      switch (next()){
+        case '1': SPEED = 70; break;
+        case '2': SPEED = 120; break;
+        case '3': SPEED = 240; break;
+        }
+        break;
     /*
      * Move
      */
