@@ -1,263 +1,191 @@
 #include <Smartcar.h>
-#include <Wire.h>
-#include <Servo.h>
+#include <TimerOne.h>
+#include <TimerThree.h>
 
-Car car;
+#define Debug Serial
+#define Control Serial3
 
-int fSpeed = 80; // 100 is 70% of the full speed forward
-const int bSpeed = -70; // -70 is 70% of the full speed backward
+#define SPEED 240
+#define INDEFINITELY 0
 
-const int lDegrees = -75; //degrees to turn left
-const int rDegrees = 75; //degrees to turn right
-SR04 ultrasonicSensor;
-const int TRIGGER_PIN = 6; //D6
-const int ECHO_PIN = 5; //D5
+#define ENABLE_TIMER1 false
+#define ENABLE_TIMER3 true
 
-SR04 ultrasonicSensor2;
-const int TRIGGER_PIN2 = 24; //D24
-const int ECHO_PIN2 = 26;
-GP2Y0A21 infraRedSensor;
-const int INFRA_PIN = A0; //analog pin A0
-const int tonePin = 7; //tone pin
-boolean sensorBack = false;
-boolean playSound = false;
-int beepSpeed = 0;
+/*
+ * Front proximity sensor
+ */
+bool FrontProximityEnabled = false;
+int FrontProximityValue;
+const int FrontProximityMax = 40;
+SR04 FrontProximity;
+const int FRONT_PROXIMITY_TRIGGER = 6;
+const int FRONT_PROXIMITY_ECHO = 5;
 
-long previousMillis = 0;
-long interval = 1000;  
-int tftrefresh = 0;
-boolean sensorToggle = true;
+/*
+ * Rear proximity sensor
+ */
+bool RearProximityEnabled = false;
+int RearProximityValue;
+const int RearProximityMax = 40;
+SR04 RearProximity;
+const int REAR_PROXIMITY_TRIGGER = 24;
+const int REAR_PROXIMITY_ECHO = 26;
 
-char serialData[32];
-byte com = 0, error = 0, timerCounter = 0;
-boolean connected;
+/*
+ * Infrared sensor
+ */
+bool InfraredEnabled = false;
+int InfraredValue;
+GP2Y0A21 Infrared;
+const int INFRARED = A0;
 
-void setup() {
-  Serial3.begin(9600);
-  //Serial.begin(9600);
-  Serial3.println("W forward, S backward\n A left\n D  right\n P accelerate, L deccelerate\n i info, R reset, Q toggle sensors on/off");
+/*
+ * Gyroscope
+ */
+const int GYRO = 10;
+Gyroscope Gyro(GYRO);
 
-  ultrasonicSensor.attach(TRIGGER_PIN, ECHO_PIN);
-  
-  car.begin(); //initialize the car using the encoders and the gyro
-}
+/*
+ * Motors
+ */
+DCMotors Motors(STANDARD);
 
-void loop() {
-  handleInput();
+/*
+ * Lights
+ */
+const int LIGHT_RIGHT = 30;
+const int LIGHT_LEFT = 46;
+const int LIGHT_FRONT = 28;
 
-  if (playSound == true){
-    digitalWrite(7, HIGH);
-    delay(beepSpeed);             
-    digitalWrite(7, LOW);    
-    delay(beepSpeed); 
-  }
+/*
+ * Speaker
+ */
+const int SPEAKER_GND = A10;
+const int SPEAKER_PIN = A12;
 
-  //Serial.println(Serial.available());
+/*
+ * Turning status
+ */
+bool TurningLeft = false;
+bool TurningRight = false;
+
+/**
+ * Get cycles of counter for switching speaker and lights
+ * when a proximity sensor is enabled
+ */
+int get_cycles(int distance) {
+  if (distance < 30) return 16;
+  if (distance < 35) return 8;
+  if (distance < 40) return 4;
+  return 1;
 }
 
 /*
- * Sends 0s so we know the connection is not lost
+ * Timer 1: Currently not used
  */
-//void isSonnected()
-//{
-//  if(millis() - lastRefreshTime >= newREFRESH_INTERVAL)
-//    {
-//      Serial.println(0);
-//    }
-//}
+int timer1_counter = 0;
+const int timer1_max = 1000;
+const int timer1_us = 1000;
+void timer1_func() {
+  /*
+   * Increase counter for this interrupt call
+   */
+  timer1_counter++;
 
-void handleInput() { //handle the Serial Input (if there is input)
-  if (Serial3.available() > 0) {
+  // Not used
 
-    connected = true;
-    // clear timeout
-    com = timerCounter;
-    
-    //char input = Serial.read(); //read everything that has been received so far and log down the last entry
-    Serial3.readBytesUntil('\n', serialData, 31);
-    switch(serialData[0])
-    {
-      case '0':
-        Serial3.println(0);
-        break;
-      case 0:
-        Serial3.println(0);
-        break;
-      case 'a': //rotate counter-clockwise going forward
-        car.setSpeed(fSpeed);
-        car.setAngle(lDegrees);
-        break;
-      case 'd': //turn clock-wise
-        car.setSpeed(fSpeed);
-        car.setAngle(rDegrees);
-        break;
-      case 'w': //go forward
-        car.setSpeed(fSpeed);
-        car.setAngle(0);
-        break;
-      case 's': //go back
-        car.setSpeed(bSpeed);
-        car.setAngle(0);
-        break;
-      case 'p':
-      // accellerate
-        if(fSpeed <= 110){
-          fSpeed += 10;
-          car.setSpeed(fSpeed);
-        }
-        break;
-      case 'l':
-      // deccelerate
-        if(fSpeed >= 70){
-          fSpeed -= 10;
-          car.setSpeed(fSpeed);
-        }
-        break;
-	    case 'q':
-	    //toggle sensors on/off
-        toggleSensors();
-        break;
-      case 'i':
-        // information about car
-        Serial3.println("OoII  Team 9 SmartCar! \\(｡◕‿◕｡)/  IIoO");
-        break;
-      case 'r':
-        // stop immediately
-        reset();
-        Serial3.println("Car has been reset!");
-        break;
-      default:
-        // command not valid
-        Serial3.println("Not a valid command!");
-    }
-
-    // clear the serialData array
-    memset(serialData, 0, sizeof(serialData));
-        
-  }
-
-  //
-  //Sensors and beep
-  //
-  
-  int distance = ultrasonicSensor.getDistance();  
-  //Serial.println(distance);
-  int distanceInfra = infraRedSensor.getDistance();
-  
-  //Serial.println(distanceInfra);
-  
-  if(((distance < 35) && (distance > 0) || (distanceInfra < 35) && (distanceInfra > 0)) && sensorToggle){
-    playSound = false;
-    beepSpeed = 0;
-    digitalWrite(tonePin, HIGH);
-    car.setSpeed(0);
-    car.setAngle(0);
-  }else{
-    digitalWrite(tonePin, LOW);
-  }
- 
-  int distance2 = ultrasonicSensor2.getDistance();
-  Serial.println(distance2);
-  if(((distance2 < 40) && (distance2 > 15) && (sensorBack == true))&& sensorToggle){
-    if ((distance2 < 39) && (distance2 > 25) && (sensorBack == true)){
-      playSound = true;
-      beepSpeed = 400;
-    }else if(((distance2 < 25) && (distance2 > 15) && (sensorBack == true))&& sensorToggle){
-      playSound = true;
-      beepSpeed = 200;
-    }else{
-      digitalWrite(7, LOW);
-      distance = 80;
-      playSound = false;
-      beepSpeed = 0;
-    }
-  }
-  if ((distance2 == 0 && (sensorBack == true))&& sensorToggle){
-      digitalWrite(7, LOW);
-      playSound = false;
-      beepSpeed = 0;
-  }
-  if(((distance2 < 15) && (distance2 > 0) && (sensorBack == true))&& sensorToggle){
-    playSound = false;
-    beepSpeed = 0;
-    Serial.println(distance2);
-    digitalWrite(7, HIGH);
-    car.setSpeed(0);
-    car.setAngle(0);
-  }else{
-    if(sensorToggle)
-            digitalWrite(7, LOW);
-  }
+  /*
+   * Limit counter
+   */
+  if (timer1_counter == timer1_max) timer1_counter = 0;
 }
 
-void toggleSensors(){
-  if(sensorToggle){
-    sensorToggle = false;
-  }else{
-    sensorToggle = true;
-  }
-}
+/*
+ * Timer 2: Control of lights and speaker
+ */
+int timer3_counter = 0;
+const int timer3_max = 1000;
+const int timer3_us = 1000;
+void timer3_func() {
+  /*
+   * Increase counter for this interrupt call
+   */
+  timer3_counter++;
 
-void reset(){
-  connected = false;
-  car.setSpeed(0);
-  car.setAngle(0);
+  if (TurningLeft || TurningRight) {
+    /*
+     * Indicate a left turn
+     */
+    if (TurningLeft) {
+      if (timer3_counter % (timer3_max / 4) == 0) {
+        digitalWrite(LIGHT_LEFT, !digitalRead(LIGHT_LEFT));
+      }
+    }
+
+    /*
+     * Indicate a right turn
+     */
+    if (TurningRight) {
+      if (timer3_counter % (timer3_max / 4) == 0) {
+        digitalWrite(LIGHT_RIGHT, !digitalRead(LIGHT_RIGHT));
+      }
+    }
+  } else if (RearProximityEnabled) {
+    /*
+     * Indicate rear proximity
+     */
+    if (RearProximityValue > 0 && RearProximityValue < RearProximityMax) {
+      if (timer3_counter % (timer3_max / get_cycles(RearProximityValue)) == 0) {
+        digitalWrite(LIGHT_RIGHT, !digitalRead(LIGHT_RIGHT));
+        digitalWrite(LIGHT_LEFT, !digitalRead(LIGHT_LEFT));
+        digitalWrite(SPEAKER_PIN, !digitalRead(SPEAKER_PIN));
+      }
+    } else {
+      digitalWrite(LIGHT_RIGHT, LOW);
+      digitalWrite(LIGHT_LEFT, LOW);
+      digitalWrite(SPEAKER_PIN, LOW);
+    }
+  } else if (FrontProximityEnabled) {
+    /*
+     * Indicate front proximity
+     */
+    if (FrontProximityValue > 0 && FrontProximityValue < FrontProximityMax) {
+      if (timer3_counter % (timer3_max / get_cycles(FrontProximityValue)) == 0) {
+        digitalWrite(LIGHT_RIGHT, !digitalRead(LIGHT_RIGHT));
+        digitalWrite(LIGHT_LEFT, !digitalRead(LIGHT_LEFT));
+        digitalWrite(SPEAKER_PIN, !digitalRead(SPEAKER_PIN));
+      }
+    } else {
+      digitalWrite(LIGHT_RIGHT, LOW);
+      digitalWrite(LIGHT_LEFT, LOW);
+      digitalWrite(SPEAKER_PIN, LOW);
+    }
+  } else {
+    /*
+     * Default to disabled
+     */
+    digitalWrite(LIGHT_LEFT, LOW);
+    digitalWrite(LIGHT_RIGHT, LOW);
+    digitalWrite(SPEAKER_PIN, LOW);
+  }
+
+  /*
+   * Limit counter
+   */
+  if (timer3_counter == timer3_max) timer3_counter = 0;
 }
 
 /**
- * Makes Integers from the Serial Data
- * first 2 chars are not counted - they are the command char and ","
- * which separate the first var
- *
- * @params command The entire serial data that is received
- * @params returnValues array for the return values
- * @params returnCount The number of values to set inside the returnValues variable
+ * Configure
  */
-boolean parseCommand(char* command, int* returnStringValues, byte returnCount)
-{
-  // parsing state machine
-  byte i = 1, j = 0, signByte = 0, charByte = 0, numByte;
-  int tempInt = 0;
-  while(i++)
-  {
-    switch(*(command + i))
-    {
-    case '\0':
-    case ',':
-      // set return value
-      if(charByte != 0)
-      {
-        returnStringValues[j++] = signByte?-tempInt:tempInt;
-        signByte = 0;
-        tempInt = 0;
-        charByte = 0;
-      }else{
-        return false;
-      }
-      break;
-    case '-':
-      signByte = 1;
-      break;
-    default:
-      // convert string to int
-      numByte = *(command + i) - '0';
-      if(numByte < 0 || numByte > 9)
-      {
-        return false;
-      }
-      tempInt = tempInt * 10 + numByte;
-      charByte++;
-    }
+void setup() {
+  /*
+   * Serial ports
+   */
+  Debug.begin(9600);
+  Control.begin(9600);
 
-    // enough return values have been set
-    if(j == returnCount)
-    {
-      return true;
-    }
-    // end of command reached
-    else if(*(command + i) == '\0')
-    {
-      return false;
-    }
-  }
-}
+  /*
+   * Motors
+   */
+  Motors.init();
