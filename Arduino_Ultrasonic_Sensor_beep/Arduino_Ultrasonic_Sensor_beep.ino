@@ -5,7 +5,6 @@
 #define Debug Serial
 #define Control Serial3
 
-//#define SPEED 240
 #define INDEFINITELY 0
 
 #define ENABLE_TIMER1 false
@@ -20,10 +19,11 @@ const int FrontProximityMax = 40;
 SR04 FrontProximity;
 const int FRONT_PROXIMITY_TRIGGER = 6;
 const int FRONT_PROXIMITY_ECHO = 5;
+
 /*
- * SPEED
- * */
- int SPEED = 240;
+ * Speed
+ */
+int Speed = 240;
  
 /*
  * Rear proximity sensor
@@ -201,7 +201,7 @@ void setup() {
   FrontProximity.attach(FRONT_PROXIMITY_TRIGGER, FRONT_PROXIMITY_ECHO);
   RearProximity.attach(REAR_PROXIMITY_TRIGGER, REAR_PROXIMITY_ECHO);
   Infrared.attach(INFRARED);
-  pinMode(InfraredValueMin, INPUT);
+  //pinMode(InfraredValueMin, INPUT);
 
   /*
    * Gyroscope attached
@@ -252,7 +252,7 @@ void setup() {
 void tick() { 
   FrontProximityValue = FrontProximity.getDistance();
   RearProximityValue = RearProximity.getDistance();
-  //InfraredValue = Infrared.getDistance();
+  InfraredValue = Infrared.getDistance();
 
   if (FrontProximityEnabled && (FrontProximityValue > 0 && FrontProximityValue < 20)) stop();
   //if (FrontProximityEnabled && (InfraredValue > InfraredValueMin)) stop();
@@ -277,15 +277,11 @@ char next() {
 void loop() {  
   switch (next()) {
     /*
-    * SPEED
+    * Speed
     */
-    case '9':
-      switch (next()){
-        case '1': SPEED = 70; break;
-        case '2': SPEED = 120; break;
-        case '3': SPEED = 240; break;
-        }
-        break;
+    case '7': Speed = 30; break;
+    case '8': Speed = 70; break;
+    case '9': Speed = 240; break;
     /*
      * Move
      */
@@ -329,14 +325,14 @@ void loop() {
  * Move forward
  */
 void moveForward() {
-  Motors.setMotorSpeed(SPEED, SPEED);
+  Motors.setMotorSpeed(Speed, Speed);
 }
 
 /**
  * Move backward
  */
 void moveBackward() {
-  Motors.setMotorSpeed(-SPEED, -SPEED);
+  Motors.setMotorSpeed(-Speed, -Speed);
 }
 
 /**
@@ -358,9 +354,10 @@ void waitUntilAngularDisplacement(int angle) {
 void turnLeft(int angle) {
   TurningLeft = true;
 
-  Motors.setMotorSpeed(-SPEED, SPEED);
-
-  if (angle > INDEFINITELY) {
+  if (angle == INDEFINITELY) {
+    Motors.setMotorSpeed(Speed / 14, Speed);
+  } else {
+    Motors.setMotorSpeed(-Speed, Speed);
     waitUntilAngularDisplacement(angle);
     stop();
   }
@@ -372,9 +369,10 @@ void turnLeft(int angle) {
 void turnRight(int angle) {
   TurningRight = true;
 
-  Motors.setMotorSpeed(SPEED, -SPEED);
-
-  if (angle > INDEFINITELY) {
+  if (angle == INDEFINITELY) {
+    Motors.setMotorSpeed(Speed, Speed / 14);
+  } else {
+    Motors.setMotorSpeed(Speed, -Speed);
     waitUntilAngularDisplacement(angle);
     stop();
   }
